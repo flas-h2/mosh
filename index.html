@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosh Hamedani Memory Matching Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 20px;
+        }
+
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 120px);
+            /* 4 columns to fit 16 cards */
+            grid-gap: 10px;
+            justify-content: center;
+            margin: 20px auto;
+        }
+
+        .card {
+            width: 120px;
+            height: 120px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .card.flip .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-inner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .card-front,
+        .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 5px;
+        }
+
+        .card-back {
+            background-color: #3498db;
+            transform: rotateY(180deg);
+        }
+
+        .card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Mosh Hamedani Memory Matching Game</h1>
+
+    <!-- Countdown Timer -->
+    <div class="countdown">Get Ready!</div>
+
+    <!-- Game Board -->
+    <div class="game-board"></div>
+
+    <!-- Controls for replay -->
+    <div class="controls">
+        <button id="replay-btn">Replay</button>
+    </div>
+
+    <!-- Embedded Audio File -->
+    <audio id="match-sound" src="mosh-hamedani-beautiful.mp3"></audio>
+    <!-- Change the src to your embedded audio file -->
+
+    <script>
+        // Replace these URLs with actual Mosh Hamedani image URLs
+        const images = [
+            'https://i.ytimg.com/vi/dESlQfe6i_g/maxresdefault.jpg',
+            'https://pluralsight.imgix.net/author/lg/mosh-hamedani-v1.jpg?w=200',
+            'https://th.bing.com/th/id/OIP.M0IsCcS37loFiLLyDQTomgHaHa?rs=1&pid=ImgDetMain',
+            'https://th.bing.com/th/id/OIP.VKQK6GtEpw9xvgxKbWjC8QHaHa?rs=1&pid=ImgDetMain',
+            'https://assets.bizclikmedia.net/668/b6891ff9fb2bb5e2d4ac8145e185c976:53aa94f05643506e5f3ad4a462732ef2/iakov-levin-w-bg.jpg.jpg',
+            'https://git.ir/media/uploads/2021/08/20/mosh-home.jpg',
+            'https://th.bing.com/th/id/OIP.IH1Y9RqYEQyRVGVedLP3SQHaFD?w=732&h=500&rs=1&pid=ImgDetMain',
+            'https://external-preview.redd.it/i9f4jm9rBWqTNXow2D9nZBUFD3J6lvVkrIRuZYR0VMs.png?format=pjpg&auto=webp&s=064d7ce666bf70265bfb7df92655a86ed4f9270b'
+        ];
+
+        let cards = [...images, ...images]; // Duplicate the 8 unique images to make 16 cards
+        let cardElements;
+        const audio = document.getElementById('match-sound'); // Reference to the embedded audio element
+        let firstCard, secondCard;
+        let hasFlippedCard = false;
+        let lockBoard = false;
+        const board = document.querySelector('.game-board');
+        const countdownEl = document.querySelector('.countdown');
+        const replayBtn = document.getElementById('replay-btn');
+
+        // Function to start the game
+        function startGame() {
+            cards = shuffle([...images, ...images]); // Shuffle new cards
+            board.innerHTML = ''; // Clear the board
+
+            // Generate cards on the game board
+            cards.forEach((image) => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front">
+                            <img src="${image}" alt="Mosh Hamedani">
+                        </div>
+                        <div class="card-back"></div>
+                    </div>
+                `;
+                card.dataset.image = image;
+                board.appendChild(card);
+            });
+
+            cardElements = document.querySelectorAll('.card');
+
+            // Show all cards with images initially (no flip)
+            let countdown = 3;
+            const countdownInterval = setInterval(() => {
+                countdownEl.textContent = `Memorize the cards! ${countdown} seconds left...`;
+                countdown--;
+
+                if (countdown < 0) {
+                    clearInterval(countdownInterval);
+                    // After 3 seconds, flip all cards to hide the images (so that the user can start guessing)
+                    cardElements.forEach(card => card.classList.add('flip'));
+                    // Allow user to start clicking on cards to flip them
+                    cardElements.forEach(card => card.addEventListener('click', flipCard));
+                    countdownEl.textContent = "Start guessing!";
+                }
+            }, 1000);
+        }
+
+        // Function to flip cards
+        function flipCard() {
+            if (lockBoard) return;
+            if (this === firstCard) return;
+
+            this.classList.remove('flip'); // Show the card (remove flip to show front)
+
+            if (!hasFlippedCard) {
+                hasFlippedCard = true;
+                firstCard = this;
+                return;
+            }
+
+            secondCard = this;
+            checkForMatch();
+        }
+
+        // Check if two flipped cards match
+        function checkForMatch() {
+            const isMatch = firstCard.dataset.image === secondCard.dataset.image;
+            isMatch ? matchSuccess() : unflipCards();
+        }
+
+        // Actions on a successful match
+        function matchSuccess() {
+            firstCard.removeEventListener('click', flipCard);
+            secondCard.removeEventListener('click', flipCard);
+            playAudio(); // Play audio if there is a match
+            resetBoard();
+        }
+
+        // Unflip the cards if they don't match
+        function unflipCards() {
+            lockBoard = true;
+            setTimeout(() => {
+                firstCard.classList.add('flip');
+                secondCard.classList.add('flip');
+                resetBoard();
+            }, 1500);
+        }
+
+        // Reset the game board after each match/unmatch attempt
+        function resetBoard() {
+            [hasFlippedCard, lockBoard] = [false, false];
+            [firstCard, secondCard] = [null, null];
+        }
+
+        // Shuffle cards array
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // Play audio on a match
+        function playAudio() {
+            if (audio) {
+                audio.play();
+            }
+        }
+
+        // Replay the game by restarting the setup
+        replayBtn.addEventListener('click', () => {
+            startGame();
+        });
+
+        // Start the game on load
+        startGame();
+    </script>
+</body>
+
+</html>
